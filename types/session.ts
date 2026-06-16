@@ -1,4 +1,4 @@
-import type { SymbolGrid, ThemeId, Volatility } from "./slot";
+import type { PaylineWin, SymbolGrid, ThemeId, Volatility } from "./slot";
 import type { WarningType } from "./warning";
 
 export type SpinRecord = {
@@ -23,6 +23,9 @@ export type SpinRecord = {
   warningTriggered?: WarningType;
   symbols: SymbolGrid;
   winningPayline?: number[];
+  winningMatchCount?: number;
+  winningPaylines?: PaylineWin[];
+  grandBonusTriggered?: boolean;
 };
 
 export type SlotSession = {
@@ -35,6 +38,7 @@ export type SlotSession = {
   peakFakeBalance?: number;
   selectedRTP: number;
   selectedVolatility: Volatility;
+  activePaylines?: number;
   defaultBetSize: number;
   currentBetSize?: number;
   totalSpins: number;
@@ -60,10 +64,12 @@ export type SlotSession = {
 };
 
 export type UserSettings = {
+  defaultTheme: ThemeId;
   startingBalance: number;
   defaultBetSize: number;
   defaultRTP: number;
   defaultVolatility: Volatility;
+  defaultActivePaylines: number;
   sessionTimeReminderMinutes: number;
   stopLossLimit: number;
   soundEnabled: boolean;

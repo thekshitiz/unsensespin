@@ -6,7 +6,7 @@ const sessionHistoryKey = "spinsense.sessionHistory";
 const settingsKey = "spinsense.settings";
 
 export function loadSettings(): UserSettings {
-  return readJson<UserSettings>(settingsKey) ?? defaultSettings;
+  return { ...defaultSettings, ...(readJson<Partial<UserSettings>>(settingsKey) ?? {}) };
 }
 
 export function saveSettings(settings: UserSettings) {

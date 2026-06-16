@@ -22,6 +22,12 @@ export type SymbolId =
 
 export type SymbolGrid = SymbolId[][];
 
+export type PaylineWin = {
+  lineIndex: number;
+  line: number[];
+  matchCount: number;
+};
+
 export type ThemeSymbol = {
   id: SymbolId;
   label: string;

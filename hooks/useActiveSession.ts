@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { generateSpinOutcome } from "@/lib/slot/engine";
 import { calculateSessionStats, currentLossStreak } from "@/lib/slot/stats";
-import { detectNearMiss, detectWinningPayline, generateSymbols } from "@/lib/slot/symbols";
+import { detectNearMiss, detectWinningMatchCount, detectWinningPayline, generateSymbols } from "@/lib/slot/symbols";
 import { detectSpinWarnings } from "@/lib/slot/warnings";
 import { calculateVelocityOfLoss } from "@/lib/telemetry/velocityOfLoss";
 import {
@@ -23,7 +23,7 @@ export function useActiveSession() {
   const [settings, setSettingsState] = useState<UserSettings>(() => loadSettings());
   const [session, setSession] = useState<SlotSession | null>(() => loadActiveSession());
   const [betAmount, setBetAmount] = useState(() => loadActiveSession()?.defaultBetSize ?? loadSettings().defaultBetSize);
-  const [theme, setTheme] = useState<ThemeId>(() => loadActiveSession()?.theme ?? "empire-conquest");
+  const [theme, setTheme] = useState<ThemeId>(() => loadActiveSession()?.theme ?? loadSettings().defaultTheme);
   const [rtp, setRtp] = useState(() => loadActiveSession()?.selectedRTP ?? loadSettings().defaultRTP);
   const [volatility, setVolatility] = useState<Volatility>(
     () => loadActiveSession()?.selectedVolatility ?? loadSettings().defaultVolatility,
@@ -60,6 +60,7 @@ export function useActiveSession() {
       peakFakeBalance: settings.startingBalance,
       selectedRTP: rtp,
       selectedVolatility: volatility,
+      activePaylines: settings.defaultActivePaylines,
       defaultBetSize: betAmount,
       currentBetSize: betAmount,
       totalSpins: 0,
@@ -109,8 +110,9 @@ export function useActiveSession() {
     const isFeatureStyleWin = outcome.multiplier >= 10;
     const baseGameWin = isFeatureStyleWin ? 0 : outcome.winAmount;
     const featureWin = isFeatureStyleWin ? outcome.winAmount : 0;
-    const symbols = generateSymbols(activeSession.theme, outcome);
+    const symbols = generateSymbols(activeSession.theme, outcome, activeSession.activePaylines);
     const winningPayline = outcome.isWin ? detectWinningPayline(symbols) : undefined;
+    const winningMatchCount = detectWinningMatchCount(symbols, winningPayline);
     const isNearMiss = !outcome.isWin && detectNearMiss(symbols, activeSession.theme);
     const secondsSincePreviousSpin = previousSpin
       ? Math.max(0, (Date.now() - new Date(previousSpin.timestamp).getTime()) / 1000)
@@ -148,6 +150,7 @@ export function useActiveSession() {
       velocityOfLossAfterSpin,
       symbols,
       winningPayline,
+      winningMatchCount,
     };
 
     const triggeredWarnings = detectSpinWarnings({
@@ -203,6 +206,57 @@ export function useActiveSession() {
     setStartedAtMs(null);
   }
 
+  function applyBonusAward(amount: number): boolean {
+    const activeSession = session;
+    const previousSpin = activeSession?.spinHistory.at(-1);
+
+    if (!activeSession || amount <= 0 || !previousSpin) {
+      return false;
+    }
+
+    const balanceAfterSpin = Number((activeSession.endingBalance + amount).toFixed(2));
+    const currentSpin: SpinRecord = {
+      id: createId("bonus"),
+      sessionId: activeSession.id,
+      timestamp: new Date().toISOString(),
+      betAmount: 0,
+      previousBetAmount: previousSpin.betAmount,
+      resultMultiplier: previousSpin.betAmount > 0 ? Number((amount / previousSpin.betAmount).toFixed(2)) : 0,
+      baseGameWin: 0,
+      featureWin: amount,
+      totalWin: amount,
+      winAmount: amount,
+      netResult: amount,
+      balanceBeforeSpin: activeSession.endingBalance,
+      balanceAfterSpin,
+      isWin: true,
+      isNearMiss: false,
+      lossStreakAtSpin: 0,
+      secondsSincePreviousSpin: Math.max(0, (Date.now() - new Date(previousSpin.timestamp).getTime()) / 1000),
+      velocityOfLossAfterSpin: calculateVelocityOfLoss(
+        activeSession.totalWagered,
+        (activeSession.totalReturned ?? activeSession.totalWon) + amount,
+        new Date(activeSession.createdAt).getTime(),
+        Date.now(),
+      ),
+      symbols: previousSpin.symbols,
+      winningPayline: previousSpin.winningPayline,
+      winningMatchCount: previousSpin.winningMatchCount,
+    };
+
+    const updatedSpins = [...activeSession.spinHistory, currentSpin];
+    const recalculated = calculateSessionStats(activeSession, updatedSpins);
+    const nextSession = {
+      ...recalculated,
+      currentBetSize: activeSession.currentBetSize,
+      peakFakeBalance: Math.max(recalculated.peakFakeBalance ?? recalculated.startingBalance, balanceAfterSpin),
+    };
+
+    setSession(nextSession);
+    saveActiveSession(nextSession);
+    return true;
+  }
+
   const chartData = useMemo(
     () =>
       session?.spinHistory.map((spin, index) => ({
@@ -235,6 +289,7 @@ export function useActiveSession() {
     elapsedSeconds,
     startSession,
     spin,
+    applyBonusAward,
     endSession,
     resetSession,
     chartData,
