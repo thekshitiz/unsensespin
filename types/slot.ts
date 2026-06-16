@@ -56,6 +56,13 @@ export type SpinOutcome = {
   isWin: boolean;
 };
 
+export type DebugOutcomeMode = "rng" | "force-loss" | "force-near-miss" | "force-win" | "force-bonus";
+
+export type DebugSpinOverride = {
+  mode: DebugOutcomeMode;
+  multiplier: number;
+};
+
 export type OutcomeBucket = {
   multiplier: number;
   weight: number;

@@ -12,7 +12,7 @@ import { themeList, themes } from "@/lib/constants/themes";
 import { formatMoney } from "@/lib/utils/currency";
 import { useActiveSession } from "@/hooks/useActiveSession";
 import type { SpinRecord } from "@/types/session";
-import type { ThemeId } from "@/types/slot";
+import type { DebugOutcomeMode, DebugSpinOverride, ThemeId } from "@/types/slot";
 import type { SessionWarning } from "@/types/warning";
 
 type AutoplayMode = "rounds" | "until-broke";
@@ -63,12 +63,15 @@ export default function SimulatorPage() {
   const [isRolling, setIsRolling] = useState(false);
   const [winPaused, setWinPaused] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [debugOutcomeMode, setDebugOutcomeMode] = useState<DebugOutcomeMode>("rng");
+  const [debugMultiplier, setDebugMultiplier] = useState(5);
   const [zenMode, setZenMode] = useState(false);
   const [showOutcomeNotice, setShowOutcomeNotice] = useState(true);
   const [rngSeed, setRngSeed] = useState(() => Math.floor(Math.random() * 900000) + 100000);
   const simRef = useRef(sim);
   const isRollingRef = useRef(isRolling);
   const winPausedRef = useRef(winPaused);
+  const winPauseTimeoutRef = useRef<number | null>(null);
   const latestSpin = sim.session?.spinHistory.at(-1);
   const sessionId = sim.session?.id;
   const activeTheme = themes[sim.session?.theme ?? sim.theme];
@@ -80,6 +83,13 @@ export default function SimulatorPage() {
   const activePaylines = sim.session?.activePaylines ?? sim.settings.defaultActivePaylines;
   const houseEdge = 100 - sim.rtp;
   const bonusProbability = estimateBonusProbability(activePaylines, sim.volatility);
+  const debugSpinOverride: DebugSpinOverride | undefined =
+    debugMode && debugOutcomeMode !== "rng"
+      ? {
+          mode: debugOutcomeMode,
+          multiplier: debugMultiplier,
+        }
+      : undefined;
   const themeFeatureCopy =
     (sim.session?.theme ?? sim.theme) === "reel-catch"
       ? {
@@ -103,6 +113,14 @@ export default function SimulatorPage() {
     winPausedRef.current = winPaused;
   }, [winPaused]);
 
+  useEffect(() => {
+    return () => {
+      if (winPauseTimeoutRef.current) {
+        window.clearTimeout(winPauseTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const runSpinWithScroll = useCallback(
     (betAmount: number, afterSpin?: (didSpin: boolean) => void) => {
       if (isRollingRef.current || winPausedRef.current) {
@@ -112,13 +130,13 @@ export default function SimulatorPage() {
       setIsRolling(true);
       setRngSeed(Math.floor(Math.random() * 900000) + 100000);
       window.setTimeout(() => {
-        const didSpin = simRef.current.spin(betAmount);
+        const didSpin = simRef.current.spin(betAmount, debugSpinOverride);
         setIsRolling(false);
         afterSpin?.(didSpin);
-      }, sim.settings.reducedMotion ? 120 : 820);
+      }, sim.settings.reducedMotion ? 120 : 1850);
       return true;
     },
-    [sim.settings.reducedMotion],
+    [debugSpinOverride, sim.settings.reducedMotion],
   );
 
   useEffect(() => {
@@ -146,8 +164,14 @@ export default function SimulatorPage() {
       if (latestSpin.grandBonusTriggered || latestSpin.resultMultiplier >= 10) {
         setAutoplayActive(false);
       }
+      if (winPauseTimeoutRef.current) {
+        window.clearTimeout(winPauseTimeoutRef.current);
+      }
       setWinPaused(true);
-      window.setTimeout(() => setWinPaused(false), latestSpin.resultMultiplier >= 25 ? 2200 : 1300);
+      winPauseTimeoutRef.current = window.setTimeout(() => {
+        setWinPaused(false);
+        winPauseTimeoutRef.current = null;
+      }, latestSpin.resultMultiplier >= 25 ? 4500 : 3200);
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -217,21 +241,42 @@ export default function SimulatorPage() {
   }, [autoplayActive, autoplayBetAmount, autoplayMode, autoplayRemaining, isRolling, runSpinWithScroll, sessionId, winPaused]);
 
   function startAutoplay() {
-    if (!sim.session) {
-      sim.startSession();
-    }
+    ensurePlayableSession();
     setAutoplayMode("rounds");
     setAutoplayRemaining(Math.max(1, Math.floor(autoplaySpinCount)));
     setAutoplayActive(true);
   }
 
   function startMaxBetUntilBroke() {
-    if (!sim.session) {
-      sim.startSession();
-    }
+    ensurePlayableSession();
     setAutoplayMode("until-broke");
     setAutoplayRemaining(0);
     setAutoplayActive(true);
+  }
+
+  function ensurePlayableSession() {
+    setBonusSpinId(null);
+    setWinPaused(false);
+    if (winPauseTimeoutRef.current) {
+      window.clearTimeout(winPauseTimeoutRef.current);
+      winPauseTimeoutRef.current = null;
+    }
+
+    const currentSession = simRef.current.session;
+    if (
+      currentSession?.endedAt ||
+      currentSession?.stopLossTriggered ||
+      currentSession?.timeLimitTriggered ||
+      (currentSession?.endingBalance ?? 0) <= 0
+    ) {
+      sim.resetSession();
+      window.setTimeout(() => simRef.current.startSession(), 0);
+      return;
+    }
+
+    if (!currentSession) {
+      sim.startSession();
+    }
   }
 
   function closeBonus() {
@@ -250,6 +295,10 @@ export default function SimulatorPage() {
     setAutoplayActive(false);
     setAutoplayRemaining(0);
     setWinPaused(false);
+    if (winPauseTimeoutRef.current) {
+      window.clearTimeout(winPauseTimeoutRef.current);
+      winPauseTimeoutRef.current = null;
+    }
     setBonusSpinId(null);
     setDismissedBonusSpinIds(new Set());
     if (sim.session) {
@@ -306,6 +355,10 @@ export default function SimulatorPage() {
                   rtp={sim.rtp}
                   session={sim.session}
                   volatility={sim.volatility}
+                  debugOutcomeMode={debugOutcomeMode}
+                  debugMultiplier={debugMultiplier}
+                  onDebugOutcomeModeChange={setDebugOutcomeMode}
+                  onDebugMultiplierChange={setDebugMultiplier}
                 />
               ) : (
                 <div className="space-y-3">

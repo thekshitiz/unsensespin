@@ -237,20 +237,20 @@ function WinOverlay({
 
   return (
     <motion.div
-      initial={reducedMotion ? false : { scale: 0.9, opacity: 0 }}
-      animate={reducedMotion ? undefined : { scale: 1, opacity: 1 }}
-      transition={{ duration: 0.46, ease: "easeOut" }}
-      className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-black/10"
+      initial={reducedMotion ? false : { y: 12, scale: 0.94, opacity: 0 }}
+      animate={reducedMotion ? undefined : { y: 0, scale: 1, opacity: 1 }}
+      transition={{ delay: reducedMotion ? 0 : 0.85, duration: 0.5, ease: "easeOut" }}
+      className="pointer-events-none absolute inset-x-2 bottom-2 z-40 flex justify-end"
     >
-      <div className="rounded-lg border border-amber-200/70 bg-slate-950/70 px-5 py-3 text-center shadow-[0_0_40px_rgba(250,204,21,0.45)] backdrop-blur-sm">
+      <div className="max-w-[72%] rounded-lg border border-amber-200/70 bg-slate-950/80 px-4 py-2 text-right shadow-[0_0_32px_rgba(250,204,21,0.38)] backdrop-blur-sm sm:max-w-[52%]">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-200">
           {isGrandBonus ? "Grand fake bonus" : "Fake win"}
         </p>
-        <p className="text-4xl font-black leading-none text-rose-100 [text-shadow:0_2px_0_#7f1d1d,0_0_18px_rgba(251,113,133,0.85)] sm:text-6xl">
+        <p className="text-3xl font-black leading-none text-rose-100 [text-shadow:0_2px_0_#7f1d1d,0_0_18px_rgba(251,113,133,0.85)] sm:text-4xl">
           {displayAmount}
         </p>
         {multiplier ? (
-          <p className="mt-1 text-sm font-bold text-amber-100">
+          <p className="mt-1 text-xs font-bold text-amber-100 sm:text-sm">
             {multiplier >= 25 ? "Jackpot-style fake hit | " : ""}
             {multiplier.toFixed(2)}x multiplier
           </p>

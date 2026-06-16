@@ -1,8 +1,8 @@
-import { Activity, Binary, Cpu, Gauge, Sigma } from "lucide-react";
+import { Activity, Binary, Cpu, Gauge, Sigma, SlidersHorizontal, TerminalSquare } from "lucide-react";
 import { calculateExpectedLoss, calculateHouseEdge } from "@/lib/slot/rtp";
 import { formatMoney } from "@/lib/utils/currency";
 import type { SlotSession } from "@/types/session";
-import type { Volatility } from "@/types/slot";
+import type { DebugOutcomeMode, Volatility } from "@/types/slot";
 
 type DebugStats = {
   rngSeed: number;
@@ -13,6 +13,10 @@ type DebugStats = {
   rtp: number;
   session: SlotSession | null;
   elapsedSeconds: number;
+  debugOutcomeMode: DebugOutcomeMode;
+  debugMultiplier: number;
+  onDebugOutcomeModeChange: (mode: DebugOutcomeMode) => void;
+  onDebugMultiplierChange: (value: number) => void;
 };
 
 export function DebugStatsPanel({
@@ -24,6 +28,10 @@ export function DebugStatsPanel({
   rtp,
   session,
   volatility,
+  debugOutcomeMode,
+  debugMultiplier,
+  onDebugOutcomeModeChange,
+  onDebugMultiplierChange,
 }: DebugStats) {
   const spinHistory = session?.spinHistory ?? [];
   const totalSpins = session?.totalSpins ?? 0;
@@ -47,6 +55,15 @@ export function DebugStatsPanel({
     ? spinHistory.reduce((sum, spin) => sum + Math.abs(spin.netResult - (session?.netProfitLoss ?? 0) / Math.max(totalSpins, 1)), 0) /
       spinHistory.length
     : 0;
+  const endingBalance = session?.endingBalance ?? 0;
+  const netProfitLoss = session?.netProfitLoss ?? 0;
+  const lastSpin = spinHistory.at(-1);
+  const lossRun = session?.spinHistory.filter((spin) => spin.betAmount > 0).slice(-8).map((spin) => (spin.isWin ? "1" : "0")).join("") || "empty";
+  const wagerBurn = totalWagered > 0 && session ? (totalWagered / session.startingBalance) * 100 : 0;
+  const bonusDensity = totalSpins > 0 ? (bonusEvents / totalSpins) * 100 : 0;
+  const balanceDeltaPercent = session ? (netProfitLoss / session.startingBalance) * 100 : 0;
+  const nextForcedGross = debugOutcomeMode === "force-loss" || debugOutcomeMode === "force-near-miss" ? 0 : betAmount * debugMultiplier;
+  const nextForcedNet = nextForcedGross - betAmount;
 
   const groups = [
     {
@@ -109,6 +126,36 @@ export function DebugStatsPanel({
         ["Volatility Proxy", `${volatility.toUpperCase()} | ${varianceProxy.toFixed(2)}`],
       ],
     },
+    {
+      title: "Balance Bus",
+      icon: TerminalSquare,
+      rows: [
+        ["Starting Balance", formatMoney(session?.startingBalance ?? 0)],
+        ["Current Balance", formatMoney(endingBalance)],
+        ["Net P/L Register", formatMoney(netProfitLoss)],
+        ["Balance Delta", `${balanceDeltaPercent.toFixed(2)}%`],
+      ],
+    },
+    {
+      title: "Pattern Analyzer",
+      icon: Binary,
+      rows: [
+        ["Last 8 Win Bits", lossRun],
+        ["Wager Burn", `${wagerBurn.toFixed(2)}% of bankroll`],
+        ["Bonus Density", `${bonusDensity.toFixed(2)}%`],
+        ["Last Multiplier", `${(lastSpin?.resultMultiplier ?? 0).toFixed(2)}x`],
+      ],
+    },
+    {
+      title: "God Mode Preview",
+      icon: SlidersHorizontal,
+      rows: [
+        ["Override Mode", debugOutcomeMode],
+        ["Multiplier Dial", `${debugMultiplier.toFixed(2)}x`],
+        ["Next Forced Gross", formatMoney(nextForcedGross)],
+        ["Next Forced Net", formatMoney(nextForcedNet)],
+      ],
+    },
   ];
 
   return (
@@ -120,6 +167,42 @@ export function DebugStatsPanel({
           Raw fake-money telemetry. These numbers explain the simulation model; they are not gambling advice.
         </p>
       </div>
+      <section className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3">
+        <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+          <SlidersHorizontal className="size-4 text-cyan-200" />
+          Superuser Outcome Lab
+        </div>
+        <label className="block text-xs font-semibold text-cyan-50">
+          Outcome override
+          <select
+            className="control mt-2 text-sm"
+            value={debugOutcomeMode}
+            onChange={(event) => onDebugOutcomeModeChange(event.target.value as DebugOutcomeMode)}
+          >
+            <option value="rng">RNG engine</option>
+            <option value="force-loss">Force loss</option>
+            <option value="force-near-miss">Force near-miss</option>
+            <option value="force-win">Force win</option>
+            <option value="force-bonus">Force bonus win</option>
+          </select>
+        </label>
+        <label className="mt-3 block text-xs font-semibold text-cyan-50">
+          Multiplier dial: {debugMultiplier.toFixed(2)}x
+          <input
+            type="range"
+            min={0.1}
+            max={50}
+            step={0.05}
+            value={debugMultiplier}
+            onChange={(event) => onDebugMultiplierChange(Number(event.target.value))}
+            className="mt-2 w-full accent-cyan-300"
+          />
+        </label>
+        <p className="mt-2 text-xs leading-5 text-cyan-50/75">
+          Applies only while Debug Mode is on. This is a simulator superuser control for exploring math outcomes, not a
+          real gambling feature.
+        </p>
+      </section>
       {groups.map((group) => {
         const Icon = group.icon;
         return (

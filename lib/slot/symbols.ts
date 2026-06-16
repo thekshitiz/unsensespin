@@ -28,7 +28,12 @@ export function getActivePaylines(count?: number) {
   return paylines.slice(0, Math.min(Math.max(count ?? 10, 1), paylines.length));
 }
 
-export function generateSymbols(theme: ThemeId, outcome: SpinOutcome, activePaylineCount?: number): SymbolGrid {
+export function generateSymbols(
+  theme: ThemeId,
+  outcome: SpinOutcome,
+  activePaylineCount?: number,
+  forceNearMiss = false,
+): SymbolGrid {
   const symbols = themes[theme].symbols;
   const activePaylines = getActivePaylines(activePaylineCount);
   const grid: SymbolGrid = Array.from({ length: 3 }, () =>
@@ -45,7 +50,7 @@ export function generateSymbols(theme: ThemeId, outcome: SpinOutcome, activePayl
         grid[line[reel]][reel] = winningSymbol;
       }
     });
-  } else if (Math.random() < 0.28) {
+  } else if (forceNearMiss || Math.random() < 0.28) {
     const highSymbols = symbols.filter((symbol) => symbol.tier === "high").map((symbol) => symbol.id);
     const otherSymbols = symbols.filter((symbol) => symbol.tier !== "high").map((symbol) => symbol.id);
     const line = activePaylines[Math.floor(Math.random() * activePaylines.length)];

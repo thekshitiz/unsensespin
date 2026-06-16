@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, CircleDollarSign, Info, RotateCw } from "lucide-react";
+import { Check, CircleDollarSign, Heart, Info, RotateCw, Spade } from "lucide-react";
 import { formatMoney } from "@/lib/utils/currency";
+
+type CardColour = "red" | "black";
 
 type BonusCard = {
   id: string;
@@ -37,6 +39,32 @@ const cards: BonusCard[] = [
   },
 ];
 
+const colourChoices: Record<
+  CardColour,
+  {
+    label: string;
+    description: string;
+    className: string;
+    instantBoost: number;
+    freeSpinBoost: number;
+  }
+> = {
+  red: {
+    label: "Red cards",
+    description: "Adds one extra fake free-spin reveal before the feature closes.",
+    className: "border-rose-200 bg-rose-500/15 text-rose-50",
+    instantBoost: 0,
+    freeSpinBoost: 1,
+  },
+  black: {
+    label: "Black cards",
+    description: "Boosts the instant fake award multiplier by 1x.",
+    className: "border-slate-300 bg-slate-800 text-slate-50",
+    instantBoost: 1,
+    freeSpinBoost: 0,
+  },
+};
+
 export function BonusRoundOverlay({
   betAmount,
   reducedMotion,
@@ -48,24 +76,30 @@ export function BonusRoundOverlay({
   onCollect: (amount: number) => void;
   onSkip: () => void;
 }) {
+  const [selectedColour, setSelectedColour] = useState<CardColour | null>(null);
   const [selectedCard, setSelectedCard] = useState<BonusCard | null>(null);
   const [revealedSpins, setRevealedSpins] = useState(0);
   const [spinAwards, setSpinAwards] = useState<number[]>([]);
   const [isRevealing, setIsRevealing] = useState(false);
   const availableCards = useMemo(() => shuffleCards(cards), []);
-  const instantAward = selectedCard ? roundMoney(selectedCard.instantMultiplier * betAmount) : 0;
+  const colourModifier = selectedColour ? colourChoices[selectedColour] : null;
+  const instantAward = selectedCard
+    ? roundMoney((selectedCard.instantMultiplier + (colourModifier?.instantBoost ?? 0)) * betAmount)
+    : 0;
+  const totalFreeSpins = selectedCard ? selectedCard.freeSpins + (colourModifier?.freeSpinBoost ?? 0) : 0;
   const spinTotal = spinAwards.reduce((sum, award) => sum + award, 0);
   const totalAward = roundMoney(instantAward + spinTotal);
 
   function chooseCard(card: BonusCard) {
-    if (selectedCard) {
+    if (!selectedColour || selectedCard) {
       return;
     }
 
     setSelectedCard(card);
     setIsRevealing(true);
-    const awards = Array.from({ length: card.freeSpins }, (_, index) => {
-      const multiplier = [0, 0.5, 1, 1.5, 2][(index + card.instantMultiplier) % 5];
+    const chosenFreeSpins = card.freeSpins + (colourModifier?.freeSpinBoost ?? 0);
+    const awards = Array.from({ length: chosenFreeSpins }, (_, index) => {
+      const multiplier = [0, 0.5, 1, 1.5, 2][(index + card.instantMultiplier + (colourModifier?.instantBoost ?? 0)) % 5];
       return roundMoney(multiplier * betAmount);
     });
 
@@ -93,10 +127,10 @@ export function BonusRoundOverlay({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.22em] text-amber-200">Fake bonus lab</p>
-            <h2 className="mt-2 text-3xl font-black text-white">Pick a colour card</h2>
+            <h2 className="mt-2 text-3xl font-black text-white">Pick red or black</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
               This separate screen demonstrates how bonus modes, choice reveals, and slower pacing can hold attention.
-              Awards are fake and educational only.
+              Pick a playing-card colour first, then choose a feature card. Awards are fake and educational only.
             </p>
           </div>
           <button className="secondary-button" onClick={onSkip}>
@@ -104,16 +138,41 @@ export function BonusRoundOverlay({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {(["red", "black"] as CardColour[]).map((colour) => {
+            const choice = colourChoices[colour];
+            const isSelected = selectedColour === colour;
+            const Icon = colour === "red" ? Heart : Spade;
+            return (
+              <button
+                key={colour}
+                disabled={Boolean(selectedCard)}
+                onClick={() => setSelectedColour(colour)}
+                className={`min-h-36 rounded-lg border p-4 text-left transition hover:scale-[1.01] disabled:cursor-default ${choice.className} ${
+                  isSelected ? "ring-2 ring-white/80" : "opacity-90"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <Icon className="size-8" />
+                  {isSelected ? <Check className="size-6" /> : null}
+                </div>
+                <p className="mt-6 text-2xl font-black">{choice.label}</p>
+                <p className="mt-2 text-sm opacity-85">{choice.description}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
           {availableCards.map((card) => {
             const isSelected = selectedCard?.id === card.id;
             return (
               <button
                 key={card.id}
-                disabled={Boolean(selectedCard)}
+                disabled={!selectedColour || Boolean(selectedCard)}
                 onClick={() => chooseCard(card)}
                 className={`min-h-40 rounded-lg border p-4 text-left transition hover:scale-[1.01] disabled:cursor-default ${card.className} ${
-                  isSelected ? "ring-2 ring-white/80" : "opacity-95"
+                  isSelected ? "ring-2 ring-white/80" : selectedColour ? "opacity-95" : "opacity-45"
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -121,7 +180,11 @@ export function BonusRoundOverlay({
                   {isSelected ? <Check className="size-6" /> : null}
                 </div>
                 <p className="mt-8 text-xl font-black">{card.label}</p>
-                <p className="mt-2 text-sm opacity-85">Reveal fake free spins and one instant feature award.</p>
+                <p className="mt-2 text-sm opacity-85">
+                  {selectedColour
+                    ? "Reveal fake free spins and one instant feature award."
+                    : "Pick red or black first to unlock this feature card."}
+                </p>
               </button>
             );
           })}
@@ -135,7 +198,7 @@ export function BonusRoundOverlay({
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {selectedCard ? (
-                Array.from({ length: selectedCard.freeSpins }, (_, index) => (
+                Array.from({ length: totalFreeSpins }, (_, index) => (
                   <motion.div
                     key={index}
                     initial={reducedMotion ? false : { opacity: 0.35, scale: 0.96 }}
@@ -155,7 +218,9 @@ export function BonusRoundOverlay({
                   </motion.div>
                 ))
               ) : (
-                <p className="col-span-full text-sm text-slate-400">Choose a card to reveal the fake bonus sequence.</p>
+                <p className="col-span-full text-sm text-slate-400">
+                  Pick red or black, then choose a card to reveal the fake bonus sequence.
+                </p>
               )}
             </div>
           </section>
@@ -166,8 +231,9 @@ export function BonusRoundOverlay({
               <h3 className="font-bold">Feature summary</h3>
             </div>
             <dl className="mt-4 space-y-3 text-sm">
+              <Row label="Playing-card choice" value={selectedColour ? colourChoices[selectedColour].label : "Not picked"} />
               <Row label="Instant fake award" value={formatMoney(instantAward)} />
-              <Row label="Fake free spins" value={selectedCard ? String(selectedCard.freeSpins) : "0"} />
+              <Row label="Fake free spins" value={String(totalFreeSpins)} />
               <Row label="Revealed so far" value={formatMoney(spinTotal)} />
               <Row label="Total fake feature" value={formatMoney(totalAward)} strong />
             </dl>

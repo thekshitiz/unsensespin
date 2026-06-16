@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { generateSpinOutcome } from "@/lib/slot/engine";
+import { roundMoney } from "@/lib/slot/rtp";
 import { calculateSessionStats, currentLossStreak } from "@/lib/slot/stats";
 import { detectNearMiss, evaluateWinningPaylines, generateSymbols } from "@/lib/slot/symbols";
 import { detectSpinWarnings } from "@/lib/slot/warnings";
@@ -16,7 +17,7 @@ import {
 } from "@/lib/storage/localStorage";
 import { createId } from "@/lib/utils/ids";
 import type { SlotSession, SpinRecord, UserSettings } from "@/types/session";
-import type { SpinSettings, ThemeId, Volatility } from "@/types/slot";
+import type { DebugSpinOverride, SpinOutcome, SpinSettings, ThemeId, Volatility } from "@/types/slot";
 import type { SessionWarning } from "@/types/warning";
 
 export function useActiveSession() {
@@ -91,7 +92,7 @@ export function useActiveSession() {
     saveActiveSession(nextSession);
   }
 
-  function spin(overrideBetAmount?: number): boolean {
+  function spin(overrideBetAmount?: number, debugOverride?: DebugSpinOverride): boolean {
     const activeSession = session;
     const spinBetAmount = overrideBetAmount ?? betAmount;
     if (!activeSession || activeSession.endingBalance < spinBetAmount || activeSession.endedAt) {
@@ -106,16 +107,17 @@ export function useActiveSession() {
     };
 
     const previousSpin = activeSession.spinHistory.at(-1);
-    const outcome = generateSpinOutcome(settingsForSpin);
+    const outcome = createDebugOutcome(settingsForSpin, debugOverride);
     const isFeatureStyleWin = outcome.multiplier >= 10;
     const baseGameWin = isFeatureStyleWin ? 0 : outcome.winAmount;
     const featureWin = isFeatureStyleWin ? outcome.winAmount : 0;
-    const symbols = generateSymbols(activeSession.theme, outcome, activeSession.activePaylines);
+    const forceNearMiss = debugOverride?.mode === "force-near-miss";
+    const symbols = generateSymbols(activeSession.theme, outcome, activeSession.activePaylines, forceNearMiss);
     const winningPaylines = outcome.isWin ? evaluateWinningPaylines(symbols, activeSession.activePaylines) : [];
     const winningPayline = winningPaylines[0]?.line;
     const winningMatchCount = winningPaylines[0]?.matchCount ?? 0;
     const grandBonusTriggered = winningPaylines.length >= 5 || outcome.multiplier >= 25;
-    const isNearMiss = !outcome.isWin && detectNearMiss(symbols, activeSession.theme);
+    const isNearMiss = !outcome.isWin && (forceNearMiss || detectNearMiss(symbols, activeSession.theme));
     const secondsSincePreviousSpin = previousSpin
       ? Math.max(0, (Date.now() - new Date(previousSpin.timestamp).getTime()) / 1000)
       : undefined;
@@ -297,5 +299,33 @@ export function useActiveSession() {
     endSession,
     resetSession,
     chartData,
+  };
+}
+
+function createDebugOutcome(settings: SpinSettings, debugOverride?: DebugSpinOverride): SpinOutcome {
+  if (!debugOverride || debugOverride.mode === "rng") {
+    return generateSpinOutcome(settings);
+  }
+
+  if (debugOverride.mode === "force-loss" || debugOverride.mode === "force-near-miss") {
+    return {
+      multiplier: 0,
+      winAmount: 0,
+      netResult: roundMoney(-settings.betAmount),
+      isWin: false,
+    };
+  }
+
+  const multiplier =
+    debugOverride.mode === "force-bonus"
+      ? Math.max(10, debugOverride.multiplier)
+      : Math.max(0.1, debugOverride.multiplier);
+  const winAmount = roundMoney(settings.betAmount * multiplier);
+
+  return {
+    multiplier: Number(multiplier.toFixed(2)),
+    winAmount,
+    netResult: roundMoney(winAmount - settings.betAmount),
+    isWin: winAmount > 0,
   };
 }
