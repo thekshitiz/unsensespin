@@ -1,0 +1,71 @@
+import type { SymbolGrid, ThemeId, Volatility } from "./slot";
+import type { WarningType } from "./warning";
+
+export type SpinRecord = {
+  id: string;
+  sessionId: string;
+  timestamp: string;
+  betAmount: number;
+  previousBetAmount?: number;
+  resultMultiplier: number;
+  baseGameWin?: number;
+  featureWin?: number;
+  totalWin?: number;
+  winAmount: number;
+  netResult: number;
+  balanceBeforeSpin?: number;
+  balanceAfterSpin: number;
+  isWin: boolean;
+  isNearMiss: boolean;
+  lossStreakAtSpin: number;
+  secondsSincePreviousSpin?: number;
+  velocityOfLossAfterSpin?: number;
+  warningTriggered?: WarningType;
+  symbols: SymbolGrid;
+  winningPayline?: number[];
+};
+
+export type SlotSession = {
+  id: string;
+  createdAt: string;
+  endedAt?: string;
+  theme: ThemeId;
+  startingBalance: number;
+  endingBalance: number;
+  peakFakeBalance?: number;
+  selectedRTP: number;
+  selectedVolatility: Volatility;
+  defaultBetSize: number;
+  currentBetSize?: number;
+  totalSpins: number;
+  totalWagered: number;
+  totalReturned?: number;
+  totalWon: number;
+  baseGameTotalWon?: number;
+  featureTotalWon?: number;
+  netProfitLoss: number;
+  expectedLoss: number;
+  actualRtp?: number;
+  actualVsExpectedDifference: number;
+  biggestWin: number;
+  longestLosingStreak: number;
+  nearMissCount: number;
+  lossChasingWarnings: number;
+  rapidSpinWarnings: number;
+  velocityOfLoss?: number;
+  peakVelocityOfLoss?: number;
+  stopLossTriggered: boolean;
+  timeLimitTriggered: boolean;
+  spinHistory: SpinRecord[];
+};
+
+export type UserSettings = {
+  startingBalance: number;
+  defaultBetSize: number;
+  defaultRTP: number;
+  defaultVolatility: Volatility;
+  sessionTimeReminderMinutes: number;
+  stopLossLimit: number;
+  soundEnabled: boolean;
+  reducedMotion: boolean;
+};
