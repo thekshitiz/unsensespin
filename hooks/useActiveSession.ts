@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { generateSpinOutcome } from "@/lib/slot/engine";
 import { calculateSessionStats, currentLossStreak } from "@/lib/slot/stats";
-import { detectNearMiss, detectWinningMatchCount, detectWinningPayline, generateSymbols } from "@/lib/slot/symbols";
+import { detectNearMiss, evaluateWinningPaylines, generateSymbols } from "@/lib/slot/symbols";
 import { detectSpinWarnings } from "@/lib/slot/warnings";
 import { calculateVelocityOfLoss } from "@/lib/telemetry/velocityOfLoss";
 import {
@@ -111,8 +111,10 @@ export function useActiveSession() {
     const baseGameWin = isFeatureStyleWin ? 0 : outcome.winAmount;
     const featureWin = isFeatureStyleWin ? outcome.winAmount : 0;
     const symbols = generateSymbols(activeSession.theme, outcome, activeSession.activePaylines);
-    const winningPayline = outcome.isWin ? detectWinningPayline(symbols) : undefined;
-    const winningMatchCount = detectWinningMatchCount(symbols, winningPayline);
+    const winningPaylines = outcome.isWin ? evaluateWinningPaylines(symbols, activeSession.activePaylines) : [];
+    const winningPayline = winningPaylines[0]?.line;
+    const winningMatchCount = winningPaylines[0]?.matchCount ?? 0;
+    const grandBonusTriggered = winningPaylines.length >= 5 || outcome.multiplier >= 25;
     const isNearMiss = !outcome.isWin && detectNearMiss(symbols, activeSession.theme);
     const secondsSincePreviousSpin = previousSpin
       ? Math.max(0, (Date.now() - new Date(previousSpin.timestamp).getTime()) / 1000)
@@ -151,6 +153,8 @@ export function useActiveSession() {
       symbols,
       winningPayline,
       winningMatchCount,
+      winningPaylines,
+      grandBonusTriggered,
     };
 
     const triggeredWarnings = detectSpinWarnings({
