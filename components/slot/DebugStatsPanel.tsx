@@ -15,8 +15,14 @@ type DebugStats = {
   elapsedSeconds: number;
   debugOutcomeMode: DebugOutcomeMode;
   debugMultiplier: number;
+  debugHitChance: number;
+  debugBonusChance: number;
+  debugRtp: number;
   onDebugOutcomeModeChange: (mode: DebugOutcomeMode) => void;
   onDebugMultiplierChange: (value: number) => void;
+  onDebugHitChanceChange: (value: number) => void;
+  onDebugBonusChanceChange: (value: number) => void;
+  onDebugRtpChange: (value: number) => void;
 };
 
 export function DebugStatsPanel({
@@ -30,8 +36,14 @@ export function DebugStatsPanel({
   volatility,
   debugOutcomeMode,
   debugMultiplier,
+  debugHitChance,
+  debugBonusChance,
+  debugRtp,
   onDebugOutcomeModeChange,
   onDebugMultiplierChange,
+  onDebugHitChanceChange,
+  onDebugBonusChanceChange,
+  onDebugRtpChange,
 }: DebugStats) {
   const spinHistory = session?.spinHistory ?? [];
   const totalSpins = session?.totalSpins ?? 0;
@@ -64,6 +76,13 @@ export function DebugStatsPanel({
   const balanceDeltaPercent = session ? (netProfitLoss / session.startingBalance) * 100 : 0;
   const nextForcedGross = debugOutcomeMode === "force-loss" || debugOutcomeMode === "force-near-miss" ? 0 : betAmount * debugMultiplier;
   const nextForcedNet = nextForcedGross - betAmount;
+  const debugHouseEdge = calculateHouseEdge(debugRtp);
+  const expectedHouseWinAtCurrentWager = calculateExpectedLoss(totalWagered, debugRtp);
+  const expectedHouseWinNext100 = avgBet * 100 * (debugHouseEdge / 100);
+  const expectedHouseWinNext1000 = avgBet * 1000 * (debugHouseEdge / 100);
+  const expectedPlayerReturnNext100 = avgBet * 100 * (debugRtp / 100);
+  const projectedBalanceAfter100 = session ? session.endingBalance - expectedHouseWinNext100 : 0;
+  const projectedBalanceAfter1000 = session ? session.endingBalance - expectedHouseWinNext1000 : 0;
 
   const groups = [
     {
@@ -81,6 +100,8 @@ export function DebugStatsPanel({
       icon: Sigma,
       rows: [
         ["Probability of Bonus Trigger", `${bonusProbability.toFixed(2)}%`],
+        ["Debug Hit Chance", `${debugHitChance.toFixed(1)}%`],
+        ["Debug Bonus Chance", `${debugBonusChance.toFixed(1)}%`],
         ["Active Payline Coverage", `${activePaylines}/20 lines`],
         ["Estimated Hit Rate", `${hitRate.toFixed(2)}%`],
         ["Near-Miss Rate", `${nearMissRate.toFixed(2)}%`],
@@ -91,7 +112,9 @@ export function DebugStatsPanel({
       icon: Gauge,
       rows: [
         ["Current House Edge", `${houseEdge.toFixed(2)}%`],
+        ["Debug House Edge", `${debugHouseEdge.toFixed(2)}%`],
         ["Target RTP", `${rtp.toFixed(2)}%`],
+        ["Debug RTP Dial", `${debugRtp.toFixed(2)}%`],
         ["Actual RTP", `${actualRtp.toFixed(2)}%`],
         ["RTP Drift", `${(actualRtp - rtp).toFixed(2)} pts`],
       ],
@@ -152,8 +175,30 @@ export function DebugStatsPanel({
       rows: [
         ["Override Mode", debugOutcomeMode],
         ["Multiplier Dial", `${debugMultiplier.toFixed(2)}x`],
+        ["Hit Chance Dial", `${debugHitChance.toFixed(1)}%`],
+        ["Bonus Chance Dial", `${debugBonusChance.toFixed(1)}%`],
         ["Next Forced Gross", formatMoney(nextForcedGross)],
         ["Next Forced Net", formatMoney(nextForcedNet)],
+      ],
+    },
+    {
+      title: "House Edge Lab",
+      icon: Gauge,
+      rows: [
+        ["Who Decides Edge", "RTP setting"],
+        ["Formula", "100 - RTP"],
+        ["Expected House Win So Far", formatMoney(expectedHouseWinAtCurrentWager)],
+        ["Current Pattern Avg Bet", formatMoney(avgBet)],
+      ],
+    },
+    {
+      title: "Long-Run Projection",
+      icon: Activity,
+      rows: [
+        ["Next 100 Spins House Win", formatMoney(expectedHouseWinNext100)],
+        ["Next 100 Spins Player Return", formatMoney(expectedPlayerReturnNext100)],
+        ["Balance After 100 EV", formatMoney(projectedBalanceAfter100)],
+        ["Balance After 1000 EV", formatMoney(projectedBalanceAfter1000)],
       ],
     },
   ];
@@ -198,9 +243,56 @@ export function DebugStatsPanel({
             className="mt-2 w-full accent-cyan-300"
           />
         </label>
+        <label className="mt-3 block text-xs font-semibold text-cyan-50">
+          Hit probability dial: {debugHitChance.toFixed(1)}%
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={0.5}
+            value={debugHitChance}
+            onChange={(event) => onDebugHitChanceChange(Number(event.target.value))}
+            className="mt-2 w-full accent-cyan-300"
+          />
+        </label>
+        <label className="mt-3 block text-xs font-semibold text-cyan-50">
+          Bonus probability dial: {debugBonusChance.toFixed(1)}%
+          <input
+            type="range"
+            min={0}
+            max={50}
+            step={0.25}
+            value={debugBonusChance}
+            onChange={(event) => onDebugBonusChanceChange(Number(event.target.value))}
+            className="mt-2 w-full accent-cyan-300"
+          />
+        </label>
+        <label className="mt-3 block text-xs font-semibold text-cyan-50">
+          RTP / house edge dial: {debugRtp.toFixed(1)}% RTP | {debugHouseEdge.toFixed(1)}% edge
+          <input
+            type="range"
+            min={50}
+            max={100}
+            step={0.5}
+            value={debugRtp}
+            onChange={(event) => onDebugRtpChange(Number(event.target.value))}
+            className="mt-2 w-full accent-cyan-300"
+          />
+        </label>
         <p className="mt-2 text-xs leading-5 text-cyan-50/75">
           Applies only while Debug Mode is on. This is a simulator superuser control for exploring math outcomes, not a
           real gambling feature.
+        </p>
+      </section>
+      <section className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-3">
+        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+          <Gauge className="size-4 text-amber-200" />
+          How The House Edge Is Decided
+        </div>
+        <p className="text-xs leading-5 text-amber-50/85">
+          In this simulator, the selected RTP decides the house edge. The formula is <span className="font-mono">100 - RTP</span>.
+          A 98% RTP means a 2% expected house edge: over many spins, the model expects the house side to retain about
+          {` ${formatMoney(avgBet * (debugHouseEdge / 100))} `}per spin at the current average bet of {formatMoney(avgBet)}.
         </p>
       </section>
       {groups.map((group) => {

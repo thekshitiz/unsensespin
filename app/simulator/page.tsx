@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bug, Eye, EyeOff, Pause, Play, RotateCcw, Square, Zap } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { BonusRoundOverlay } from "@/components/slot/BonusRoundOverlay";
@@ -65,6 +65,9 @@ export default function SimulatorPage() {
   const [debugMode, setDebugMode] = useState(false);
   const [debugOutcomeMode, setDebugOutcomeMode] = useState<DebugOutcomeMode>("rng");
   const [debugMultiplier, setDebugMultiplier] = useState(5);
+  const [debugHitChance, setDebugHitChance] = useState(35);
+  const [debugBonusChance, setDebugBonusChance] = useState(1);
+  const [debugRtp, setDebugRtp] = useState(sim.rtp);
   const [zenMode, setZenMode] = useState(false);
   const [showOutcomeNotice, setShowOutcomeNotice] = useState(true);
   const [rngSeed, setRngSeed] = useState(() => Math.floor(Math.random() * 900000) + 100000);
@@ -83,13 +86,19 @@ export default function SimulatorPage() {
   const activePaylines = sim.session?.activePaylines ?? sim.settings.defaultActivePaylines;
   const houseEdge = 100 - sim.rtp;
   const bonusProbability = estimateBonusProbability(activePaylines, sim.volatility);
-  const debugSpinOverride: DebugSpinOverride | undefined =
-    debugMode && debugOutcomeMode !== "rng"
-      ? {
-          mode: debugOutcomeMode,
-          multiplier: debugMultiplier,
-        }
-      : undefined;
+  const debugSpinOverride: DebugSpinOverride | undefined = useMemo(
+    () =>
+      debugMode
+        ? {
+            mode: debugOutcomeMode,
+            multiplier: debugMultiplier,
+            hitChance: debugHitChance,
+            bonusChance: debugBonusChance,
+            rtp: debugRtp,
+          }
+        : undefined,
+    [debugBonusChance, debugHitChance, debugMode, debugMultiplier, debugOutcomeMode, debugRtp],
+  );
   const themeFeatureCopy =
     (sim.session?.theme ?? sim.theme) === "reel-catch"
       ? {
@@ -357,8 +366,14 @@ export default function SimulatorPage() {
                   volatility={sim.volatility}
                   debugOutcomeMode={debugOutcomeMode}
                   debugMultiplier={debugMultiplier}
+                  debugHitChance={debugHitChance}
+                  debugBonusChance={debugBonusChance}
+                  debugRtp={debugRtp}
                   onDebugOutcomeModeChange={setDebugOutcomeMode}
                   onDebugMultiplierChange={setDebugMultiplier}
+                  onDebugHitChanceChange={setDebugHitChance}
+                  onDebugBonusChanceChange={setDebugBonusChance}
+                  onDebugRtpChange={setDebugRtp}
                 />
               ) : (
                 <div className="space-y-3">
@@ -470,19 +485,18 @@ export default function SimulatorPage() {
                     Grand bonus: up to five paylines connected on this fake result.
                   </p>
                 ) : null}
-                {latestSpin && !isRolling ? <SpinResultExplanation spin={latestSpin} theme={sim.session?.theme ?? sim.theme} /> : null}
               </div>
               {!sim.session ? (
-                <button onClick={sim.startSession} className="primary-button min-h-20 px-8 text-lg">
-                  <Play className="size-5" /> Start
+                <button onClick={sim.startSession} className="slot-spin-button min-h-24 px-10 text-xl">
+                  <Play className="size-7" /> Start
                 </button>
               ) : (
                 <button
                   disabled={!canSpin}
                   onClick={() => runSpinWithScroll(sim.betAmount)}
-                  className="primary-button min-h-20 px-8 text-lg disabled:cursor-not-allowed disabled:opacity-45"
+                  className="slot-spin-button min-h-24 px-10 text-xl disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  <Zap className="size-5" /> Spin
+                  <Zap className="size-7" /> Spin
                 </button>
               )}
             </div>
@@ -539,19 +553,19 @@ export default function SimulatorPage() {
                   />
                 </Field>
                 {autoplayActive ? (
-                  <button className="secondary-button self-end" onClick={() => setAutoplayActive(false)}>
-                    <Pause className="size-4" /> Stop
+                  <button className="slot-autoplay-button self-end border-rose-200/40 bg-rose-500/20 text-rose-50" onClick={() => setAutoplayActive(false)}>
+                    <Pause className="size-5" /> Stop
                   </button>
                 ) : (
-                  <button disabled={!canAutoplay} className="secondary-button self-end disabled:cursor-not-allowed disabled:opacity-45" onClick={startAutoplay}>
-                    <Play className="size-4" /> Start
+                  <button disabled={!canAutoplay} className="slot-autoplay-button self-end disabled:cursor-not-allowed disabled:opacity-45" onClick={startAutoplay}>
+                    <Play className="size-5" /> Start
                   </button>
                 )}
               </div>
               {!autoplayActive ? (
                 <button
                   disabled={!canAutoplay}
-                  className="mt-3 w-full rounded-md border border-rose-300/35 bg-rose-400/15 px-4 py-3 text-sm font-black uppercase tracking-wide text-rose-100 transition hover:border-rose-200 hover:bg-rose-400/25 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="mt-3 inline-flex min-h-16 w-full items-center justify-center rounded-md border border-rose-200/50 bg-gradient-to-b from-rose-400/35 to-rose-700/35 px-5 py-4 text-base font-black uppercase tracking-wide text-rose-50 shadow-[0_0_26px_rgba(244,63,94,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] transition hover:border-rose-100 hover:from-rose-300/45 hover:to-rose-600/45 disabled:cursor-not-allowed disabled:opacity-45"
                   onClick={startMaxBetUntilBroke}
                 >
                   <Zap className="mr-2 inline size-4" /> Max bet until I lose it all
@@ -691,75 +705,4 @@ function getSpinNotificationContent(spin: SpinRecord, theme: ThemeId) {
     footer: "Each spin is independent. A streak of losses does not build hidden progress toward a future win.",
     className: "border-slate-400/20 bg-white/[0.04]",
   };
-}
-
-function SpinResultExplanation({ spin, theme }: { spin: SpinRecord; theme: ThemeId }) {
-  const themeSymbols = themes[theme].symbols;
-  const symbolLabel = (symbolId?: string) =>
-    themeSymbols.find((symbol) => symbol.id === symbolId)?.label ?? symbolId ?? "symbol";
-  const grossWin = spin.winAmount;
-  const formula =
-    spin.betAmount > 0
-      ? `${formatMoney(spin.betAmount)} bet x ${spin.resultMultiplier} = ${formatMoney(grossWin)} gross win; ${formatMoney(grossWin)} - ${formatMoney(spin.betAmount)} stake = ${formatMoney(spin.netResult)} net result.`
-      : `Feature award added ${formatMoney(spin.netResult)} without charging another spin stake.`;
-
-  if (spin.isWin) {
-    const winningLines = spin.winningPaylines?.length
-      ? spin.winningPaylines
-      : spin.winningPayline
-        ? [{ lineIndex: 0, line: spin.winningPayline, matchCount: spin.winningMatchCount ?? 0 }]
-        : [];
-
-    return (
-      <div className="mt-3 rounded-md border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm text-emerald-50">
-        <p className="font-bold text-white">How this result happened</p>
-        <p className="mt-1 text-emerald-100">{formula}</p>
-        {winningLines.length ? (
-          <ul className="mt-2 space-y-1 text-emerald-100">
-            {winningLines.map((win) => {
-              const matchedSymbol = symbolLabel(spin.symbols[win.line[0]]?.[0]);
-              const path = win.line.map((row, reel) => `R${reel + 1}:${row + 1}`).join(" -> ");
-              return (
-                <li key={`${win.lineIndex}-${win.matchCount}`}>
-                  Payline {win.lineIndex + 1}: {matchedSymbol} matched across {win.matchCount} reels on {path}.
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-        <p className="mt-2 text-xs text-emerald-200/85">
-          The highlighted connector shows the payline path. The multiplier is the simulated payout rate for this spin,
-          not evidence that the next spin is more likely to win.
-        </p>
-      </div>
-    );
-  }
-
-  if (spin.isNearMiss) {
-    return (
-      <div className="mt-3 rounded-md border border-amber-300/25 bg-amber-300/10 p-3 text-sm text-amber-50">
-        <p className="font-bold text-white">Why this still lost</p>
-        <p className="mt-1">
-          The reel showed a near-miss pattern, but no active payline reached three matching symbols from the left.
-          The full {formatMoney(spin.betAmount)} stake was lost on this spin.
-        </p>
-        <p className="mt-2 text-xs text-amber-100/85">
-          Near-misses can feel close, but they do not make the next random spin more controllable or more likely to win.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-3 rounded-md border border-slate-400/20 bg-slate-900/70 p-3 text-sm text-slate-200">
-      <p className="font-bold text-white">Why this lost</p>
-      <p className="mt-1">
-        None of the active paylines produced at least three matching symbols from the left, so the multiplier stayed at
-        0x and the {formatMoney(spin.betAmount)} stake was deducted.
-      </p>
-      <p className="mt-2 text-xs text-slate-400">
-        Each spin is independent. A losing streak does not build hidden progress toward a future win.
-      </p>
-    </div>
-  );
 }

@@ -61,6 +61,9 @@ export type DebugOutcomeMode = "rng" | "force-loss" | "force-near-miss" | "force
 export type DebugSpinOverride = {
   mode: DebugOutcomeMode;
   multiplier: number;
+  hitChance: number;
+  bonusChance: number;
+  rtp: number;
 };
 
 export type OutcomeBucket = {

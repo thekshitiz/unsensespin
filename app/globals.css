@@ -71,3 +71,63 @@ select {
 .secondary-button:hover {
   background: rgb(255 255 255 / 0.08);
 }
+
+.slot-spin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(253 224 71 / 0.72);
+  background: linear-gradient(180deg, #fef08a 0%, #f59e0b 48%, #b45309 100%);
+  font-weight: 950;
+  color: #1c1917;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  box-shadow:
+    0 0 34px rgb(251 191 36 / 0.42),
+    inset 0 2px 0 rgb(255 255 255 / 0.45),
+    inset 0 -4px 0 rgb(120 53 15 / 0.42);
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.slot-spin-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 42px rgb(251 191 36 / 0.55),
+    inset 0 2px 0 rgb(255 255 255 / 0.5),
+    inset 0 -4px 0 rgb(120 53 15 / 0.45);
+}
+
+.slot-autoplay-button {
+  display: inline-flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(125 211 252 / 0.42);
+  background: linear-gradient(180deg, rgb(34 211 238 / 0.24), rgb(14 116 144 / 0.38));
+  padding: 0.9rem 1.15rem;
+  font-weight: 900;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  box-shadow:
+    0 0 24px rgb(34 211 238 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.2);
+  transition:
+    transform 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.slot-autoplay-button:hover {
+  transform: translateY(-1px);
+  border-color: rgb(165 243 252 / 0.78);
+  background: linear-gradient(180deg, rgb(34 211 238 / 0.34), rgb(14 116 144 / 0.5));
+}

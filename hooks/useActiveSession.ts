@@ -303,8 +303,44 @@ export function useActiveSession() {
 }
 
 function createDebugOutcome(settings: SpinSettings, debugOverride?: DebugSpinOverride): SpinOutcome {
-  if (!debugOverride || debugOverride.mode === "rng") {
+  if (!debugOverride) {
     return generateSpinOutcome(settings);
+  }
+
+  if (debugOverride.mode === "rng") {
+    const winRoll = Math.random() * 100;
+    const bonusRoll = Math.random() * 100;
+
+    if (bonusRoll < debugOverride.bonusChance) {
+      const multiplier = Math.max(10, debugOverride.multiplier);
+      const winAmount = roundMoney(settings.betAmount * multiplier);
+      return {
+        multiplier: Number(multiplier.toFixed(2)),
+        winAmount,
+        netResult: roundMoney(winAmount - settings.betAmount),
+        isWin: true,
+      };
+    }
+
+    if (winRoll >= debugOverride.hitChance) {
+      return {
+        multiplier: 0,
+        winAmount: 0,
+        netResult: roundMoney(-settings.betAmount),
+        isWin: false,
+      };
+    }
+
+    const hitChance = Math.max(1, debugOverride.hitChance) / 100;
+    const targetAverageMultiplier = debugOverride.rtp / 100 / hitChance;
+    const multiplier = Math.max(0.1, Math.min(debugOverride.multiplier, targetAverageMultiplier));
+    const winAmount = roundMoney(settings.betAmount * multiplier);
+    return {
+      multiplier: Number(multiplier.toFixed(2)),
+      winAmount,
+      netResult: roundMoney(winAmount - settings.betAmount),
+      isWin: true,
+    };
   }
 
   if (debugOverride.mode === "force-loss" || debugOverride.mode === "force-near-miss") {
